@@ -1,12 +1,21 @@
 /** Database setup for libellis. */
 
-const { Client } = require("pg");
+const Pool = require('pg-pool');
+const url = require('url');
 const { DB_URI } = require("./config");
 
-const client = new Client({
-  connectionString: DB_URI
-});
+const params = url.parse(DB_URI);
+const auth = params.auth.split(':');
 
-client.connect();
+const config = {
+  user: auth[0],
+  password: auth[1],
+  host: params.hostname,
+  port: 5432,
+  database: 'libellis',
+  ssl: false
+};
 
-module.exports = client;
+const pool = new Pool(config);
+
+module.exports = pool;

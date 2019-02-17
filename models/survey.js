@@ -1,4 +1,4 @@
-const db = require('../db');
+const pool = require('../db');
 const {
   sqlForPartialUpdate,
   classPartialUpdate
@@ -39,16 +39,23 @@ class Survey {
 
     if (id === undefined) throw new Error('Missing id parameter')
 
-    let result = await db.query(
-      `SELECT id, author, title, description, category, date_posted, anonymous, published
-            FROM surveys
-            WHERE id=$1`, [id]
-    )
+    const db = await pool.connect();
+    try {
+      let result = await db.query(
+        `SELECT id, author, title, description, category, date_posted, anonymous, published
+              FROM surveys
+              WHERE id=$1`, [id]
+      )
 
-    if (result.rows.length < 1) {
-      const err = Error('Not Found');
-      err.status = 404;
-      throw err;
+      if (result.rows.length < 1) {
+        const err = Error('Not Found');
+        err.status = 404;
+        throw err;
+      }
+    } catch(e) {
+      console.error(e.message, e.stack);
+    } finally {
+      db.release();
     }
 
     return new Survey(result.rows[0]);
@@ -61,35 +68,31 @@ class Survey {
    */
   static async getAll(search) {
     let result;
-    if (search === undefined || search === '') {
-      result = await db.query(
-        `SELECT id, author, title, description, category, date_posted, anonymous, published
-        FROM surveys
-        WHERE published=true`
-      );
-    } else {
-      result = await db.query(
-        `SELECT id, author, title, description, category, date_posted, anonymous, published
-                FROM surveys WHERE 
-                author ILIKE $1 OR
-                title ILIKE $1 OR
-                description ILIKE $1`, [`%${search}%`]
-      );
+    const db = await pool.connect();
+    try {
+      if (search === undefined || search === '') {
+        result = await db.query(
+          `SELECT id, author, title, description, category, date_posted, anonymous, published
+          FROM surveys
+          WHERE published=true`
+        );
+      } else {
+        result = await db.query(
+          `SELECT id, author, title, description, category, date_posted, anonymous, published
+                  FROM surveys WHERE 
+                  author ILIKE $1 OR
+                  title ILIKE $1 OR
+                  description ILIKE $1`, [`%${search}%`]
+        );
+      }
+    } catch(e) {
+      console.error(e.message, e.stack);
+    } finally {
+      db.release();
     }
 
     return result.rows.map(s => new Survey(s));
   }
-
-  /** get surveys by user is handled by User model, so this is commented out */
-
-  // static async getForUser(username) {
-  //   let result = await db.query(
-  //     `SELECT id, author, title, description, date_posted, anonymous, published
-  //     FROM surveys WHERE author = $1`, [username]
-  //   );
-  //   return result.rows.map(s => new Survey(s));
-  // }
-
 
   /**
    * createSurvey(author, title, description) <- returns created survey details
@@ -99,12 +102,20 @@ class Survey {
   static async create({ author, username, title, description, category }) {
     if (!author || !title) throw new Error('Missing author or title parameter');
 
-    let result = await db.query(
-      `INSERT INTO surveys (author, title, description, category)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, author, title, description, category, date_posted, anonymous, published`,
-      [author, title, description, category]
-    )
+    const db = await pool.connect();
+    try {
+      let result = await db.query(
+        `INSERT INTO surveys (author, title, description, category)
+              VALUES ($1, $2, $3, $4)
+              RETURNING id, author, title, description, category, date_posted, anonymous, published`,
+        [author, title, description, category]
+      )
+    } catch(e) {
+      console.error(e.message, e.stack);
+    } finally {
+      db.release();
+    }
+
 
     return new Survey(result.rows[0]);
   }
@@ -130,24 +141,39 @@ class Survey {
       this.id
     );
 
-    const result = await db.query(query, values);
+    const db = await pool.connect();
+    try {
+      const result = await db.query(query, values);
 
-    if (result.rows.length === 0) {
-      const err = new Error('Cannot find survey to update');
-      err.status = 400;
-      throw err;
+      if (result.rows.length === 0) {
+        const err = new Error('Cannot find survey to update');
+        err.status = 400;
+        throw err;
+      }
+    } catch(e) {
+      console.error(e.message, e.stack);
+    } finally {
+      db.release();
     }
   }
 
   //Delete user and return a message
   async delete() {
-    const result = await db.query(
-      `
-        DELETE FROM surveys 
-        WHERE id=$1
-        RETURNING id`,
-      [this.id]
-    );
+    const db = await pool.connect();
+    try {
+      const result = await db.query(
+        `
+          DELETE FROM surveys 
+          WHERE id=$1
+          RETURNING id`,
+        [this.id]
+      );
+    } catch(e) {
+      console.error(e.message, e.stack);
+    } finally {
+      db.release();
+    }
+
     if (result.rows.length === 0) {
       throw new Error(`Could not delete survey: ${this.id}`);
     }
