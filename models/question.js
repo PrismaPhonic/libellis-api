@@ -1,4 +1,4 @@
-const db = require('../db');
+const pool = require('../db');
 const {
   sqlForPartialUpdate,
   classPartialUpdate
@@ -39,37 +39,42 @@ class Question {
   /**
    * getAll() -> only use case is to return all questions by a survey_id
    * so that's what this does
-   * 
+   *
    */
   static async getAll({ survey_id }) {
-
     //If search, type or survey_id are undefined then they will be %%
     //helps fix bug if passed in object does not have all 3, or search
     //is intentionally empty to get all
-    let result = await db.query(`
+
+    const db = await pool.connect();
+
+    let result = await db.query(
+      `
       SELECT id, survey_id, title, question_type
       FROM questions 
       WHERE survey_id=$1
       `,
       [survey_id]
     );
-
+    db.release();
     return result.rows.map(q => new Question(q));
   }
 
   /**
    * get(id) -> return a question by id
-   * 
+   *
    */
   static async get(id) {
-
     if (id === undefined) throw new Error('Missing id parameter');
+    const db = await pool.connect();
 
-    const result = await db.query(`
+    const result = await db.query(
+      `
       SELECT id, survey_id, title, question_type
       FROM questions
       WHERE id=$1
-      `, [id]
+      `,
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -77,6 +82,7 @@ class Question {
       err.status = 404;
       throw err;
     }
+    db.release();
 
     return new Question(result.rows[0]);
   }
@@ -84,15 +90,20 @@ class Question {
   /**
    * create(survey_id, title, question_type) -> creates a new question for the
    * given survey and returns it as a new instance of Question class.
-   * 
+   *
    */
   static async create({ survey_id, title, question_type }) {
-    if (survey_id === undefined || title === undefined ||
-        question_type === undefined) {
+    if (
+      survey_id === undefined ||
+      title === undefined ||
+      question_type === undefined
+    ) {
       const err = new Error(`Must supply title, question_type and survey_id`);
       err.status = 400;
       throw err;
     }
+    const db = await pool.connect();
+
     const result = await db.query(
       `
     INSERT INTO questions (survey_id, title, question_type)
@@ -102,6 +113,7 @@ class Question {
       [survey_id, title, question_type]
     );
 
+    db.release();
     return new Question(result.rows[0]);
   }
 
@@ -111,11 +123,9 @@ class Question {
 
   //Update a question instance
   async save() {
-    const {
-      query,
-      values
-    } = sqlForPartialUpdate(
-      'questions', {
+    const { query, values } = sqlForPartialUpdate(
+      'questions',
+      {
         survey_id: this.survey_id,
         title: this.title,
         question_type: this.question_type
@@ -123,6 +133,7 @@ class Question {
       'id',
       this.id
     );
+    const db = await pool.connect();
 
     const result = await db.query(query, values);
 
@@ -131,10 +142,13 @@ class Question {
       err.status = 400;
       throw err;
     }
+    db.release();
   }
 
   //Delete question and return a message
   async delete() {
+    const db = await pool.connect();
+
     const result = await db.query(
       `
         DELETE FROM questions 
@@ -142,7 +156,7 @@ class Question {
         RETURNING id`,
       [this.id]
     );
-
+    db.release();
     // Update to return boolean
     return `Question Deleted`;
   }
