@@ -1,5 +1,5 @@
 process.env.NODE_ENV = 'test';
-const db = require('../../db');
+const pool = require('../../db');
 const request = require('supertest');
 const app = require('../../app');
 const User = require('../../models/user');
@@ -84,11 +84,13 @@ describe('GET /surveys', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.surveys.length).toBe(0);
 
+    const db = await pool.connect();
     let survey_result = await db.query(`
     INSERT INTO surveys (author, title, description, published, category)
     VALUES ('joerocket', 'Best Books Ever', 'J.k rowling aint got shit on this', true, 'music')
     RETURNING id, author, title, description, anonymous, date_posted, category
   `);
+    db.release();
 
     let survey3 = survey_result.rows[0];
 
@@ -484,5 +486,5 @@ afterEach(async function () {
 
 //Close db connection
 afterAll(async function () {
-  await db.end();
+  await pool.end();
 });

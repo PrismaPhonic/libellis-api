@@ -1,11 +1,11 @@
-const db = require('../db');
+const pool = require('../db');
 const {
   sqlForPartialUpdate,
-  classPartialUpdate,
+  classPartialUpdate
 } = require('../helpers/partialUpdate');
 
 class Vote {
-  constructor({choice_id, username, score}) {
+  constructor({ choice_id, username, score }) {
     this.choice_id = choice_id;
     this.username = username;
     this.score = score;
@@ -39,9 +39,10 @@ class Vote {
    * getAll() -> return all votes by a question_id
    *
    */
-  static async getAll({question_id}) {
-
-    let result = await db.query(`
+  static async getAll({ question_id }) {
+    const db = await pool.connect();
+    let result = await db.query(
+      `
     SELECT 
     SUM(score) AS votes, 
     questions.title AS question_title, 
@@ -51,8 +52,10 @@ class Vote {
     WHERE questions.id = $1
     GROUP BY choice_title, question_title
     ORDER BY votes DESC
-    `, [question_id]);
-
+    `,
+      [question_id]
+    );
+    db.release();
     // we will need to return the votes as an array this time - can't create
     // vote instances since those would need choice_id, survey_id, question_id
     // and username to be defined.
@@ -63,23 +66,21 @@ class Vote {
    * get(composite_key) -> return a vote by username and choice_id
    *
    */
-  static async get({username, choice_id}) {
-    const voteData = [username, , choice_id];
+  static async get({ username, choice_id }) {
+    const voteData = [username, choice_id];
     if (voteData.some(data => data === '' || !data)) {
-      const err = new Error(
-        'Missing parameters',
-      );
+      const err = new Error('Missing parameters');
       err.status = 400;
       throw err;
     }
-
+    const db = await pool.connect();
     const result = await db.query(
       `
       SELECT choice_id, username, score
       FROM votes
       WHERE (choice_id=$1 and username=$2)
       `,
-      [choice_id, username],
+      [choice_id, username]
     );
 
     if (result.rows.length === 0) {
@@ -87,7 +88,7 @@ class Vote {
       err.status = 404;
       throw err;
     }
-
+    db.release();
     return new Vote(result.rows[0]);
   }
 
@@ -95,16 +96,15 @@ class Vote {
    * create(username, choice_id, score) -> creates a new vote for the
    * given survey and returns it as a new instance of Vote class.
    */
-  static async create({username, choice_id, score}) {
+  static async create({ username, choice_id, score }) {
     const voteData = [username, choice_id, score];
 
     if (voteData.some(data => !data)) {
-      const err = new Error(
-        'Missing parameters',
-      );
+      const err = new Error('Missing parameters');
       err.status = 400;
       throw err;
     }
+    const db = await pool.connect();
 
     const result = await db.query(
       `
@@ -112,9 +112,9 @@ class Vote {
       VALUES ($1, $2, $3)
       RETURNING username, choice_id, score
       `,
-      [username, choice_id, score],
+      [username, choice_id, score]
     );
-
+    db.release();
     return new Vote(result.rows[0]);
   }
 
@@ -122,17 +122,20 @@ class Vote {
   // returning choice_id only for the reason
   // of verifying successful deletion
   async delete() {
+    const db = await pool.connect();
+
     const result = await db.query(
       `
         DELETE FROM votes 
         WHERE (choice_id=$1 and username=$2)
         RETURNING choice_id`,
-      [this.choice_id, this.username],
+      [this.choice_id, this.username]
     );
 
     if (result.rows.length === 0) {
       throw new Error(`Could not delete vote`);
     }
+    db.release();
     return `Vote Removed`;
   }
 }
