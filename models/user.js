@@ -1,4 +1,4 @@
-const db = require('../db');
+const pool = require('../db');
 const {
   sqlForPartialUpdate,
   classPartialUpdate
@@ -7,7 +7,6 @@ const bcrypt = require('bcryptjs');
 const { BWF, SECRET, DEFAULT_PHOTO } = require('../config');
 const jwt = require('jsonwebtoken');
 const Survey = require('../models/survey');
-
 
 class User /* extends Model */ {
   constructor({ username, first_name, last_name, email, photo_url, is_admin }) {
@@ -35,11 +34,16 @@ class User /* extends Model */ {
   //Get a filtered list of users and return array of instances
   static async getUsers() {
     //If search is undefined then search will be %%
+
+    const db = await pool.connect();
+
     let result = await db.query(
       `
     SELECT username, first_name, last_name, email
     FROM users`
     );
+
+    db.release();
 
     return result.rows.map(user => new User(user));
   }
@@ -54,8 +58,9 @@ class User /* extends Model */ {
     photo_url,
     is_admin
   }) {
-    try {
+    const db = await pool.connect();
 
+    try {
       let salt = bcrypt.genSaltSync(BWF);
       let result = await db.query(
         `
@@ -73,20 +78,29 @@ class User /* extends Model */ {
         ]
       );
 
-      return new User(result.rows[0]);  
+      return new User(result.rows[0]);
     } catch (err) {
       let error = new Error(`Username "${username}" already exists`);
       error.status = 400;
       throw error;
     }
+
+    db.release();
   }
 
   // Authenticate user - returns JWT
   static async authenticate({ username, password }) {
-    const result = await db.query(`
+    const db = await pool.connect();
+
+    const result = await db.query(
+      `
       SELECT password, is_admin FROM users WHERE username=$1
-    `, [username]
+    `,
+      [username]
     );
+
+    db.release();
+
     const user = result.rows[0];
     if (user) {
       if (bcrypt.compareSync(password, user.password)) {
@@ -94,18 +108,21 @@ class User /* extends Model */ {
         return token;
       }
     }
-    throw new Error('Invalid username/password')
+    throw new Error('Invalid username/password');
   }
 
   /** get User details - returns shallow user data */
   static async getUser(username) {
+    const db = await pool.connect();
+
     let result = await db.query(
-      `
-    SELECT username, first_name, last_name, email, photo_url
+      `SELECT username, first_name, last_name, email, photo_url
     FROM users 
     WHERE username = $1`,
       [username]
     );
+
+    db.release();
 
     if (result.rows.length === 0) {
       const err = new Error(`Cannot find user by username: ${username}`);
@@ -118,10 +135,15 @@ class User /* extends Model */ {
 
   /** get Surveys created by given user */
   static async getSurveys(username) {
+    const db = await pool.connect();
+
     let result = await db.query(
       `SELECT id, author, title, description, date_posted, anonymous, published
-      FROM surveys WHERE author=$1`, [username]
+      FROM surveys WHERE author=$1`,
+      [username]
     );
+
+    db.release();
 
     if (result.rows.length === 0) return [];
 
@@ -130,6 +152,8 @@ class User /* extends Model */ {
 
   /** get Surveys user has voted on */
   static async getHistory(username) {
+    const db = await pool.connect();
+
     let result = await db.query(
       `SELECT 
         survey_id, 
@@ -150,10 +174,12 @@ class User /* extends Model */ {
         s.description, 
         s.anonymous, 
         s.published,
-        s.date_posted;`, 
+        s.date_posted;`,
       [username]
     );
-    
+
+    db.release();
+
     if (result.rows.length === 0) return [];
 
     return result.rows;
@@ -177,7 +203,12 @@ class User /* extends Model */ {
       'username',
       this.username
     );
+
+    const db = await pool.connect();
+
     const result = await db.query(query, values);
+
+    db.release();
 
     if (result.rows.length === 0) {
       const err = new Error('Cannot find user to update');
@@ -188,6 +219,8 @@ class User /* extends Model */ {
 
   //Delete user and return a message
   async deleteUser() {
+    const db = await pool.connect();
+
     const result = await db.query(
       `
     DELETE FROM users 
@@ -196,8 +229,10 @@ class User /* extends Model */ {
       [this.username]
     );
 
+    db.release();
+
     if (result.rows.length === 0) {
-      let err = new Error(`Could not find user to delete`)
+      let err = new Error(`Could not find user to delete`);
       err.status = 400;
       throw err;
     }
