@@ -1,5 +1,5 @@
 process.env.NODE_ENV = 'test';
-const db = require('../../db');
+const pool = require('../../db');
 const request = require('supertest');
 const app = require('../../app');
 const User = require('../../models/user');
@@ -456,5 +456,5 @@ afterEach(async function() {
 
 //Close db connection
 afterAll(async function() {
-  await db.end();
+  await pool.end();
 });
