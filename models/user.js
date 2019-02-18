@@ -37,14 +37,17 @@ class User /* extends Model */ {
 
     const db = await pool.connect();
 
+    console.log('get Users');
+
     let result = await db.query(
       `
-    SELECT username, first_name, last_name, email
-    FROM users`
+      SELECT username, first_name, last_name, email
+      FROM users`
     );
 
     db.release();
-
+    pool.end();
+    console.log('retreived Users');
     return result.rows.map(user => new User(user));
   }
 

@@ -1,4 +1,4 @@
-const db = require('../db');
+const pool = require('../db');
 var fs = require('fs');
 
 const User = require('../models/user');
@@ -6,22 +6,13 @@ const User = require('../models/user');
 async function createTables() {
   // run create tables SQL from data.sql
   const initSQL = fs.readFileSync('data.sql').toString();
+
+  const db = await pool.connect();
   await db.query(initSQL);
+  db.release();
 }
 
 async function insertTestData() {
-  // let result1 = await db.query(`
-    // INSERT INTO users (username, password, first_name, last_name, email, is_admin)
-    // VALUES ('joerocket', 'testpass', 'joe', 'smith', 'joe@gmail.com', True)
-    // RETURNING username, first_name, last_name, email, photo_url, is_admin
-  // `);
-  // let result2 = await db.query(`
-    // INSERT INTO users (username, password, first_name, last_name, email, is_admin)
-    // VALUES ('spongebob', 'garry', 'SpongeBob', 'SquarePants', 'sponge@gmail.com', False)
-    // RETURNING username, first_name, last_name, email, photo_url, is_admin
-  // `);
-
-
   const user1 = await User.createUser({
     username: 'joerocket',
     password: 'testpass',
@@ -30,7 +21,7 @@ async function insertTestData() {
     email: 'joe@gmail.com',
     is_admin: true
   });
-  
+
   user1._token = await User.authenticate({
     username: user1.username,
     password: 'testpass'
@@ -52,10 +43,12 @@ async function insertTestData() {
   /***********************************************/
   /** Create categories so Surveys can have them */
 
+  const db = await pool.connect();
+
   let result25 = await db.query(`
-    INSERT INTO categories (title)
-    VALUES ('music')
-    RETURNING title
+  INSERT INTO categories (title)
+  VALUES ('music')
+  RETURNING title
   `);
 
   let result26 = await db.query(`
@@ -84,17 +77,23 @@ async function insertTestData() {
   const survey1 = result3.rows[0];
   const survey2 = result4.rows[0];
 
-  let result5 = await db.query(`
+  let result5 = await db.query(
+    `
     INSERT INTO questions (title, question_type, survey_id)
     VALUES ('Favorite EDM Artist','multiple', $1)
     RETURNING id, title, question_type, survey_id
-  `, [survey1.id]);
+  `,
+    [survey1.id]
+  );
 
-  let result6 = await db.query(`
+  let result6 = await db.query(
+    `
     INSERT INTO questions (title, question_type, survey_id)
     VALUES ('Favorite Bootcamp CEO','ranked', $1)
     RETURNING id, title, question_type, survey_id
-  `, [survey2.id]);
+  `,
+    [survey2.id]
+  );
 
   const question1 = result5.rows[0];
   const question2 = result6.rows[0];
@@ -103,7 +102,8 @@ async function insertTestData() {
 
   // 4 choices for favorite EDM artists
 
-  let result7 = await db.query(`
+  let result7 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Bassnectar-Test-Youtube-Link.html', 'Bassnectar', 'youtube')
     RETURNING id, question_id, content, title, content_type
@@ -111,7 +111,8 @@ async function insertTestData() {
     [question1.id]
   );
 
-  let result8 = await db.query(`
+  let result8 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Tiesto-Youtube-Link.html', 'Tiesto', 'youtube')
     RETURNING id, question_id, content, title, content_type
@@ -119,7 +120,8 @@ async function insertTestData() {
     [question1.id]
   );
 
-  let result9 = await db.query(`
+  let result9 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Beats-Antique-Youtube-Link.html', 'Beats Antique', 'youtube')
     RETURNING id, question_id, content, title, content_type
@@ -127,7 +129,8 @@ async function insertTestData() {
     [question1.id]
   );
 
-  let result10 = await db.query(`
+  let result10 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Slugabed-Youtube-Link.html', 'Slugabed', 'youtube')
     RETURNING id, question_id, content, title, content_type
@@ -142,7 +145,8 @@ async function insertTestData() {
 
   // 4 choices for top bootcamp school ceo
 
-  let result11 = await db.query(`
+  let result11 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Elie-CEO.html', 'Elie Schoppik', 'text')
     RETURNING id, question_id, content, title, content_type
@@ -150,7 +154,8 @@ async function insertTestData() {
     [question2.id]
   );
 
-  let result12 = await db.query(`
+  let result12 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Matt-CEO.html', 'Matthew Lane', 'text')
     RETURNING id, question_id, content, title, content_type
@@ -158,7 +163,8 @@ async function insertTestData() {
     [question2.id]
   );
 
-  let result13 = await db.query(`
+  let result13 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Steve-Jerbs-CEO.html', 'Steve Jerbs', 'text')
     RETURNING id, question_id, content, title, content_type
@@ -166,7 +172,8 @@ async function insertTestData() {
     [question2.id]
   );
 
-  let result14 = await db.query(`
+  let result14 = await db.query(
+    `
     INSERT INTO choices (question_id, content, title, content_type)
     VALUES ($1, 'Chill-Gates-CEO.html', 'Chill Gates', 'text')
     RETURNING id, question_id, content, title, content_type
@@ -181,13 +188,13 @@ async function insertTestData() {
 
   /************************************* */
 
-
   /************************************* */
   /** Create votes for user1 and user2 */
 
   // Both users vote on the same choice for question1 which is multiple
   // choice so question 3 should be the winner for that question in tests
-  let result15 = await db.query(`
+  let result15 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 1)
     RETURNING choice_id, username, score
@@ -195,7 +202,8 @@ async function insertTestData() {
     [choice3.id, user1.username]
   );
 
-  let result16 = await db.query(`
+  let result16 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 1)
     RETURNING choice_id, username, score
@@ -207,7 +215,8 @@ async function insertTestData() {
   const vote2 = result16.rows[0];
 
   // user1's 4 votes for one question (ranked question with 4 choices)
-  let result17 = await db.query(`
+  let result17 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 4)
     RETURNING choice_id, username, score
@@ -215,7 +224,8 @@ async function insertTestData() {
     [choice5.id, user1.username]
   );
 
-  let result18 = await db.query(`
+  let result18 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 3)
     RETURNING choice_id, username, score
@@ -223,7 +233,8 @@ async function insertTestData() {
     [choice6.id, user1.username]
   );
 
-  let result19 = await db.query(`
+  let result19 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 2)
     RETURNING choice_id, username, score
@@ -231,7 +242,8 @@ async function insertTestData() {
     [choice7.id, user1.username]
   );
 
-  let result20 = await db.query(`
+  let result20 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 1)
     RETURNING choice_id, username, score
@@ -245,7 +257,8 @@ async function insertTestData() {
   const vote6 = result20.rows[0];
 
   // user2's 4 votes for one question (ranked question with 4 choices)
-  let result21 = await db.query(`
+  let result21 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 3)
     RETURNING choice_id, username, score
@@ -253,7 +266,8 @@ async function insertTestData() {
     [choice5.id, user2.username]
   );
 
-  let result22 = await db.query(`
+  let result22 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 2)
     RETURNING choice_id, username, score
@@ -261,7 +275,8 @@ async function insertTestData() {
     [choice6.id, user2.username]
   );
 
-  let result23 = await db.query(`
+  let result23 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 4)
     RETURNING choice_id, username, score
@@ -269,13 +284,16 @@ async function insertTestData() {
     [choice7.id, user2.username]
   );
 
-  let result24 = await db.query(`
+  let result24 = await db.query(
+    `
     INSERT INTO votes (choice_id, username, score)
     VALUES ($1, $2, 1)
     RETURNING choice_id, username, score
     `,
     [choice8.id, user2.username]
   );
+
+  db.release();
 
   const vote7 = result21.rows[0];
   const vote8 = result22.rows[0];
@@ -317,6 +335,7 @@ async function insertTestData() {
 }
 
 async function dropTables() {
+  // const db = await pool.connect();
   await db.query(`DROP VIEW users_votes`);
   await db.query(`DROP TABLE votes`);
   await db.query(`DROP TABLE choices`);
@@ -324,6 +343,8 @@ async function dropTables() {
   await db.query(`DROP TABLE surveys`);
   await db.query(`DROP TABLE categories`);
   await db.query(`DROP TABLE users`);
+  // db.release();
+  // pool.end();
 }
 
 module.exports = {
