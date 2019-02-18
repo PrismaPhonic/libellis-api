@@ -1,4 +1,4 @@
-const db = require('../db');
+const pool = require('../db');
 const {
   sqlForPartialUpdate,
   classPartialUpdate
@@ -44,6 +44,7 @@ class Choice {
    */
   static async getAll({ question_id }) {
 
+    const db = await pool.connect();
     let result = await db.query(`
       SELECT id, question_id, title, content, content_type
       FROM choices 
@@ -51,6 +52,7 @@ class Choice {
       `,
       [question_id]
     );
+    db.release();
 
     return result.rows.map(q => new Choice(q));
   }
@@ -63,12 +65,16 @@ class Choice {
 
     if (id === undefined) throw new Error(`Missing id parameter`);
 
+    const db = await pool.connect();
+
     const result = await db.query(`
       SELECT id, question_id, title, content, content_type
       FROM choices
       WHERE id=$1
       `, [id]
     );
+
+    db.release();
 
     if (result.rows.length === 0) {
       const err = Error(`Cannot find choice by id: ${id}`);
@@ -91,6 +97,8 @@ class Choice {
       err.status = 400;
       throw err;
     }
+
+    const db = await pool.connect();
     const result = await db.query(`
       INSERT INTO choices (question_id, title, content, content_type)
       VALUES ($1,$2,$3,$4)
@@ -98,6 +106,7 @@ class Choice {
     `,
       [question_id, title, content, content_type]
     );
+    db.release();
 
     return new Choice(result.rows[0]);
   }
@@ -122,7 +131,9 @@ class Choice {
       this.id
     );
 
+    const db = await pool.connect();
     const result = await db.query(query, values);
+    db.release();
 
     if (result.rows.length === 0) {
       const err = new Error(`Cannot find choice to update`);
@@ -133,6 +144,7 @@ class Choice {
 
   //Delete choice and return a message
   async delete() {
+    const db = await pool.connect();
     const result = await db.query(`
       DELETE FROM choices 
       WHERE id=$1
@@ -140,6 +152,8 @@ class Choice {
     `,
       [this.id]
     );
+
+    db.release();
 
     return `Choice Deleted`;
   }
